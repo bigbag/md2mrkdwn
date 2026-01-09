@@ -1,0 +1,75 @@
+[project]
+name = "md2mrkdwn"
+version = "0.1.0"
+description = "Convert Markdown to Slack mrkdwn format"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [{ name = "Pavel Liashkov", email = "pavel.liashkov@protonamil.com" }]
+keywords = ["markdown", "slack", "mrkdwn", "converter", "formatting"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Text Processing :: Markup",
+    "Topic :: Communications :: Chat",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/bigbag/md2mrkdwn"
+Repository = "https://github.com/bigbag/md2mrkdwn"
+Issues = "https://github.com/bigbag/md2mrkdwn/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/md2mrkdwn"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/md2mrkdwn"]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.16.0",
+    "pytest>=8.4.0",
+    "pytest-cov>=6.1.1",
+    "ruff>=0.9.0",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "C4", "UP", "SIM"]
+ignore = ["E203", "E501", "B008"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short --cov=md2mrkdwn --cov-report=term-missing"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["src/md2mrkdwn"]
+omit = ["tests/*"]
