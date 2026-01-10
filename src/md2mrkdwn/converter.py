@@ -2,6 +2,7 @@
 
 import hashlib
 import re
+from dataclasses import dataclass
 
 # =============================================================================
 # Compiled regex patterns (module-level for efficiency)
@@ -50,6 +51,63 @@ _ITALIC_PLACEHOLDER = "\x00ITALIC\x00"
 
 
 # =============================================================================
+# Configuration
+# =============================================================================
+
+
+@dataclass(frozen=True, slots=True)
+class MrkdwnConfig:
+    """Configuration for Markdown to mrkdwn conversion.
+
+    All parameters are optional - defaults match current behavior.
+    """
+
+    # Character/Symbol configuration
+    bullet_char: str = BULLET
+    checkbox_checked: str = CHECKBOX_CHECKED
+    checkbox_unchecked: str = CHECKBOX_UNCHECKED
+    horizontal_rule_char: str = HORIZONTAL_LINE
+    horizontal_rule_length: int = 10
+
+    # Mode settings
+    header_style: str = "bold"  # "bold", "plain", "prefix"
+    link_format: str = "slack"  # "slack", "url_only", "text_only"
+    table_mode: str = "code_block"  # "code_block", "preserve"
+
+    # Element enable/disable flags
+    convert_bold: bool = True
+    convert_italic: bool = True
+    convert_strikethrough: bool = True
+    convert_links: bool = True
+    convert_images: bool = True
+    convert_lists: bool = True
+    convert_task_lists: bool = True
+    convert_headers: bool = True
+    convert_horizontal_rules: bool = True
+    convert_tables: bool = True
+
+    def __post_init__(self) -> None:
+        """Validate configuration values."""
+        valid_header_styles = {"bold", "plain", "prefix"}
+        if self.header_style not in valid_header_styles:
+            raise ValueError(f"header_style must be one of {valid_header_styles}, got '{self.header_style}'")
+
+        valid_link_formats = {"slack", "url_only", "text_only"}
+        if self.link_format not in valid_link_formats:
+            raise ValueError(f"link_format must be one of {valid_link_formats}, got '{self.link_format}'")
+
+        valid_table_modes = {"code_block", "preserve"}
+        if self.table_mode not in valid_table_modes:
+            raise ValueError(f"table_mode must be one of {valid_table_modes}, got '{self.table_mode}'")
+
+        if self.horizontal_rule_length < 1:
+            raise ValueError("horizontal_rule_length must be at least 1")
+
+
+DEFAULT_CONFIG = MrkdwnConfig()
+
+
+# =============================================================================
 # Converter class
 # =============================================================================
 
@@ -62,8 +120,13 @@ class MrkdwnConverter:
     bold, italic, links, and other formatting elements.
     """
 
-    def __init__(self) -> None:
-        """Initialize the converter."""
+    def __init__(self, config: MrkdwnConfig | None = None) -> None:
+        """Initialize the converter.
+
+        Args:
+            config: Optional configuration. Uses default if not provided.
+        """
+        self._config = config or DEFAULT_CONFIG
         self._in_code_block = False
         self._table_placeholders: dict[str, str] = {}
 
@@ -129,53 +192,119 @@ class MrkdwnConverter:
         Returns:
             Converted line
         """
+        config = self._config
+
         # Check if line contains inline code - we need to protect it
         code_segments: dict[str, str] = {}
         if "`" in line:
             line, code_segments = self._protect_inline_code(line)
 
         # Step 1: Convert bold+italic first (uses both asterisks and underscores)
-        line = BOLD_ITALIC_ASTERISKS_PATTERN.sub(
-            lambda m: f"{_BOLD_PLACEHOLDER}{_ITALIC_PLACEHOLDER}{m.group(1)}{_ITALIC_PLACEHOLDER}{_BOLD_PLACEHOLDER}",
-            line,
-        )
-        line = BOLD_ITALIC_UNDERSCORES_PATTERN.sub(
-            lambda m: f"{_BOLD_PLACEHOLDER}{_ITALIC_PLACEHOLDER}{m.group(1)}{_ITALIC_PLACEHOLDER}{_BOLD_PLACEHOLDER}",
-            line,
-        )
+        if config.convert_bold and config.convert_italic:
+            line = BOLD_ITALIC_ASTERISKS_PATTERN.sub(
+                lambda m: f"{_BOLD_PLACEHOLDER}{_ITALIC_PLACEHOLDER}{m.group(1)}{_ITALIC_PLACEHOLDER}{_BOLD_PLACEHOLDER}",
+                line,
+            )
+            line = BOLD_ITALIC_UNDERSCORES_PATTERN.sub(
+                lambda m: f"{_BOLD_PLACEHOLDER}{_ITALIC_PLACEHOLDER}{m.group(1)}{_ITALIC_PLACEHOLDER}{_BOLD_PLACEHOLDER}",
+                line,
+            )
+        elif config.convert_bold:
+            # Only bold - strip the extra markers
+            line = BOLD_ITALIC_ASTERISKS_PATTERN.sub(
+                lambda m: f"{_BOLD_PLACEHOLDER}{m.group(1)}{_BOLD_PLACEHOLDER}",
+                line,
+            )
+            line = BOLD_ITALIC_UNDERSCORES_PATTERN.sub(
+                lambda m: f"{_BOLD_PLACEHOLDER}{m.group(1)}{_BOLD_PLACEHOLDER}",
+                line,
+            )
+        elif config.convert_italic:
+            # Only italic - strip the extra markers
+            line = BOLD_ITALIC_ASTERISKS_PATTERN.sub(
+                lambda m: f"{_ITALIC_PLACEHOLDER}{m.group(1)}{_ITALIC_PLACEHOLDER}",
+                line,
+            )
+            line = BOLD_ITALIC_UNDERSCORES_PATTERN.sub(
+                lambda m: f"{_ITALIC_PLACEHOLDER}{m.group(1)}{_ITALIC_PLACEHOLDER}",
+                line,
+            )
 
         # Step 2: Convert bold (before italic to prevent interference)
-        line = BOLD_ASTERISKS_PATTERN.sub(
-            lambda m: f"{_BOLD_PLACEHOLDER}{m.group(1)}{_BOLD_PLACEHOLDER}",
-            line,
-        )
-        line = BOLD_UNDERSCORES_PATTERN.sub(
-            lambda m: f"{_BOLD_PLACEHOLDER}{m.group(1)}{_BOLD_PLACEHOLDER}",
-            line,
-        )
+        if config.convert_bold:
+            line = BOLD_ASTERISKS_PATTERN.sub(
+                lambda m: f"{_BOLD_PLACEHOLDER}{m.group(1)}{_BOLD_PLACEHOLDER}",
+                line,
+            )
+            line = BOLD_UNDERSCORES_PATTERN.sub(
+                lambda m: f"{_BOLD_PLACEHOLDER}{m.group(1)}{_BOLD_PLACEHOLDER}",
+                line,
+            )
 
         # Step 3: Convert italic
-        line = ITALIC_ASTERISKS_PATTERN.sub(
-            lambda m: f"{_ITALIC_PLACEHOLDER}{m.group(1)}{_ITALIC_PLACEHOLDER}",
-            line,
-        )
-        line = ITALIC_UNDERSCORES_PATTERN.sub(
-            lambda m: f"{_ITALIC_PLACEHOLDER}{m.group(1)}{_ITALIC_PLACEHOLDER}",
-            line,
-        )
+        if config.convert_italic:
+            line = ITALIC_ASTERISKS_PATTERN.sub(
+                lambda m: f"{_ITALIC_PLACEHOLDER}{m.group(1)}{_ITALIC_PLACEHOLDER}",
+                line,
+            )
+            line = ITALIC_UNDERSCORES_PATTERN.sub(
+                lambda m: f"{_ITALIC_PLACEHOLDER}{m.group(1)}{_ITALIC_PLACEHOLDER}",
+                line,
+            )
 
         # Step 4: Convert other patterns
-        line = STRIKETHROUGH_PATTERN.sub(r"~\1~", line)
-        line = IMAGE_PATTERN.sub(r"<\2>", line)
-        line = LINK_PATTERN.sub(r"<\2|\1>", line)
-        line = TASK_CHECKED_PATTERN.sub(f"\\1{BULLET} {CHECKBOX_CHECKED} ", line)
-        line = TASK_UNCHECKED_PATTERN.sub(f"\\1{BULLET} {CHECKBOX_UNCHECKED} ", line)
-        line = UNORDERED_LIST_PATTERN.sub(f"\\1{BULLET} ", line)
-        line = HORIZONTAL_RULE_PATTERN.sub(HORIZONTAL_LINE * 10, line)
-        line = HEADER_PATTERN.sub(
-            lambda m: f"{_BOLD_PLACEHOLDER}{m.group(1)}{_BOLD_PLACEHOLDER}",
-            line,
-        )
+        if config.convert_strikethrough:
+            line = STRIKETHROUGH_PATTERN.sub(r"~\1~", line)
+
+        # Handle images - must come before links to prevent link pattern matching
+        image_segments: dict[str, str] = {}
+        if config.convert_images:
+            line = IMAGE_PATTERN.sub(r"<\2>", line)
+        elif config.convert_links:
+            # Protect images from link pattern when images disabled but links enabled
+            counter = 0
+
+            def save_image(match: re.Match[str]) -> str:
+                nonlocal counter
+                placeholder = f"%%IMG_{counter}%%"
+                image_segments[placeholder] = match.group(0)
+                counter += 1
+                return placeholder
+
+            line = IMAGE_PATTERN.sub(save_image, line)
+
+        if config.convert_links:
+            if config.link_format == "slack":
+                line = LINK_PATTERN.sub(r"<\2|\1>", line)
+            elif config.link_format == "url_only":
+                line = LINK_PATTERN.sub(r"<\2>", line)
+            elif config.link_format == "text_only":
+                line = LINK_PATTERN.sub(r"\1", line)
+
+        if config.convert_task_lists:
+            line = TASK_CHECKED_PATTERN.sub(f"\\1{config.bullet_char} {config.checkbox_checked} ", line)
+            line = TASK_UNCHECKED_PATTERN.sub(f"\\1{config.bullet_char} {config.checkbox_unchecked} ", line)
+        elif config.convert_lists:
+            # Task lists disabled but lists enabled - convert to regular bullets
+            line = TASK_CHECKED_PATTERN.sub(f"\\1{config.bullet_char} ", line)
+            line = TASK_UNCHECKED_PATTERN.sub(f"\\1{config.bullet_char} ", line)
+
+        if config.convert_lists:
+            line = UNORDERED_LIST_PATTERN.sub(f"\\1{config.bullet_char} ", line)
+
+        if config.convert_horizontal_rules:
+            hr = config.horizontal_rule_char * config.horizontal_rule_length
+            line = HORIZONTAL_RULE_PATTERN.sub(hr, line)
+
+        if config.convert_headers:
+            if config.header_style == "bold":
+                line = HEADER_PATTERN.sub(
+                    lambda m: f"{_BOLD_PLACEHOLDER}{m.group(1)}{_BOLD_PLACEHOLDER}",
+                    line,
+                )
+            elif config.header_style == "plain":
+                line = HEADER_PATTERN.sub(r"\1", line)
+            # "prefix" - leave unchanged
 
         # Step 5: Replace placeholders with final mrkdwn characters
         line = line.replace(_BOLD_PLACEHOLDER, "*")
@@ -184,6 +313,10 @@ class MrkdwnConverter:
         # Step 6: Restore inline code segments
         for placeholder, code in code_segments.items():
             line = line.replace(placeholder, code)
+
+        # Step 7: Restore protected images (when images disabled but links enabled)
+        for placeholder, image in image_segments.items():
+            line = line.replace(placeholder, image)
 
         return line
 
@@ -221,6 +354,10 @@ class MrkdwnConverter:
         Returns:
             Text with tables wrapped in code blocks via placeholders
         """
+        # Skip if tables disabled or preserve mode
+        if not self._config.convert_tables or self._config.table_mode == "preserve":
+            return text
+
         lines = text.split("\n")
         result_lines: list[str] = []
         i = 0
@@ -365,7 +502,7 @@ class MrkdwnConverter:
         return f"%%TABLE_{hash_val}%%"
 
 
-def convert(markdown: str) -> str:
+def convert(markdown: str, config: MrkdwnConfig | None = None) -> str:
     """Convert Markdown text to Slack mrkdwn format.
 
     This is a convenience function that creates a converter instance
@@ -373,6 +510,7 @@ def convert(markdown: str) -> str:
 
     Args:
         markdown: Input text in Markdown format
+        config: Optional configuration. Uses default if not provided.
 
     Returns:
         Text converted to Slack mrkdwn format
@@ -381,6 +519,11 @@ def convert(markdown: str) -> str:
         >>> from md2mrkdwn import convert
         >>> convert("**Hello** *World*")
         '*Hello* _World_'
+
+        >>> from md2mrkdwn import convert, MrkdwnConfig
+        >>> config = MrkdwnConfig(bullet_char="-")
+        >>> convert("- Item", config=config)
+        '- Item'
     """
-    converter = MrkdwnConverter()
+    converter = MrkdwnConverter(config)
     return converter.convert(markdown)

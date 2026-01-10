@@ -12,6 +12,7 @@ Pure Python library for converting Markdown to Slack's mrkdwn format. Zero depen
 
 - **Zero dependencies** - Pure Python implementation with no external packages required
 - **Comprehensive formatting** - Supports bold, italic, strikethrough, links, images, lists, and more
+- **Configurable** - Customize symbols, formats, and enable/disable specific conversions
 - **Code block handling** - Preserves content inside code blocks without conversion
 - **Table support** - Wraps markdown tables in code blocks for Slack display
 - **Task lists** - Converts checkbox syntax to Unicode symbols (☐/☑)
@@ -94,6 +95,75 @@ print(text1)  # *bold* and _italic_
 print(text2)  # *Header*\n\n• List item
 ```
 
+### Custom Configuration
+
+Use `MrkdwnConfig` to customize conversion behavior:
+
+```python
+from md2mrkdwn import convert, MrkdwnConfig, MrkdwnConverter
+
+# Custom bullet character
+config = MrkdwnConfig(bullet_char="-")
+print(convert("- Item 1\n- Item 2", config=config))
+# Output: - Item 1
+#         - Item 2
+
+# Custom checkbox symbols
+config = MrkdwnConfig(checkbox_checked="✓", checkbox_unchecked="○")
+print(convert("- [x] Done\n- [ ] Todo", config=config))
+# Output: • ✓ Done
+#         • ○ Todo
+
+# Plain headers (no bold)
+config = MrkdwnConfig(header_style="plain")
+print(convert("# Title", config=config))
+# Output: Title
+
+# URL-only links (no link text)
+config = MrkdwnConfig(link_format="url_only")
+print(convert("[Click here](https://example.com)", config=config))
+# Output: <https://example.com>
+
+# Disable specific conversions
+config = MrkdwnConfig(convert_bold=False, convert_italic=False)
+print(convert("**bold** and *italic*", config=config))
+# Output: **bold** and *italic*
+
+# Reusable converter with config
+converter = MrkdwnConverter(MrkdwnConfig(
+    bullet_char="→",
+    horizontal_rule_char="=",
+    horizontal_rule_length=20
+))
+print(converter.convert("- Item\n\n---"))
+# Output: → Item
+#
+#         ====================
+```
+
+### Configuration Options
+
+| Option                     | Type | Default        | Description                               |
+|----------------------------|------|----------------|-------------------------------------------|
+| `bullet_char`              | str  | `•`            | Character for unordered list items        |
+| `checkbox_checked`         | str  | `☑`            | Symbol for checked task items             |
+| `checkbox_unchecked`       | str  | `☐`            | Symbol for unchecked task items           |
+| `horizontal_rule_char`     | str  | `─`            | Character for horizontal rules            |
+| `horizontal_rule_length`   | int  | `10`           | Length of horizontal rules                |
+| `header_style`             | str  | `"bold"`       | `"bold"`, `"plain"`, or `"prefix"`        |
+| `link_format`              | str  | `"slack"`      | `"slack"`, `"url_only"`, or `"text_only"` |
+| `table_mode`               | str  | `"code_block"` | `"code_block"` or `"preserve"`            |
+| `convert_bold`             | bool | `True`         | Enable/disable bold conversion            |
+| `convert_italic`           | bool | `True`         | Enable/disable italic conversion          |
+| `convert_strikethrough`    | bool | `True`         | Enable/disable strikethrough conversion   |
+| `convert_links`            | bool | `True`         | Enable/disable link conversion            |
+| `convert_images`           | bool | `True`         | Enable/disable image conversion           |
+| `convert_lists`            | bool | `True`         | Enable/disable list conversion            |
+| `convert_task_lists`       | bool | `True`         | Enable/disable task list conversion       |
+| `convert_headers`          | bool | `True`         | Enable/disable header conversion          |
+| `convert_horizontal_rules` | bool | `True`         | Enable/disable horizontal rule conversion |
+| `convert_tables`           | bool | `True`         | Enable/disable table wrapping             |
+
 ### Handling Tables
 
 Markdown tables are automatically wrapped in code blocks since Slack doesn't support native table rendering:
@@ -123,24 +193,24 @@ Output:
 
 ## Conversion Reference
 
-| Markdown | mrkdwn | Notes |
-|----------|--------|-------|
-| `**bold**` or `__bold__` | `*bold*` | Slack uses single asterisk |
-| `*italic*` or `_italic_` | `_italic_` | Slack uses underscores |
-| `***bold+italic***` | `*_text_*` | Combined formatting |
-| `~~strikethrough~~` | `~text~` | Single tilde |
-| `[text](url)` | `<url\|text>` | Slack link format |
-| `![alt](url)` | `<url>` | Images become plain URLs |
-| `# Header` (all levels) | `*Header*` | Bold (Slack has no headers) |
-| `- item` / `* item` | `• item` | Bullet character (U+2022) |
-| `1. item` | `1. item` | Preserved as-is |
-| `- [ ] task` | `• ☐ task` | Unchecked checkbox (U+2610) |
-| `- [x] task` | `• ☑ task` | Checked checkbox (U+2611) |
-| `> quote` | `> quote` | Same syntax |
-| `` `code` `` | `` `code` `` | Same syntax |
-| ``` code block ``` | ``` code block ``` | Same syntax |
-| `---` / `***` | `──────────` | Horizontal rule (U+2500) |
-| Tables | Wrapped in ``` | Slack has no native tables |
+| Markdown                   | mrkdwn             | Notes                        |
+|----------------------------|--------------------|------------------------------|
+| `**bold**` or `__bold__`   | `*bold*`           | Slack uses single asterisk   |
+| `*italic*` or `_italic_`   | `_italic_`         | Slack uses underscores       |
+| `***bold+italic***`        | `*_text_*`         | Combined formatting          |
+| `~~strikethrough~~`        | `~text~`           | Single tilde                 |
+| `[text](url)`              | `<url\|text>`      | Slack link format            |
+| `![alt](url)`              | `<url>`            | Images become plain URLs     |
+| `# Header` (all levels)    | `*Header*`         | Bold (Slack has no headers)  |
+| `- item` / `* item`        | `• item`           | Bullet character (U+2022)    |
+| `1. item`                  | `1. item`          | Preserved as-is              |
+| `- [ ] task`               | `• ☐ task`         | Unchecked checkbox (U+2610)  |
+| `- [x] task`               | `• ☑ task`         | Checked checkbox (U+2611)    |
+| `> quote`                  | `> quote`          | Same syntax                  |
+| `` `code` ``               | `` `code` ``       | Same syntax                  |
+| ``` code block ```         | ``` code block ``` | Same syntax                  |
+| `---` / `***`              | `──────────`       | Horizontal rule (U+2500)     |
+| Tables                     | Wrapped in ```     | Slack has no native tables   |
 
 ## How It Works
 
@@ -217,10 +287,11 @@ md2mrkdwn/
 ├── src/
 │   └── md2mrkdwn/
 │       ├── __init__.py      # Package exports
-│       └── converter.py     # MrkdwnConverter class
+│       └── converter.py     # MrkdwnConverter, MrkdwnConfig classes
 ├── tests/
 │   ├── conftest.py          # Pytest fixtures
-│   └── test_converter.py    # Test suite (49 tests)
+│   ├── test_converter.py    # Converter tests
+│   └── test_config.py       # Configuration tests
 ├── pyproject.toml           # Project configuration
 ├── Makefile                 # Development commands
 └── README.md
@@ -228,12 +299,13 @@ md2mrkdwn/
 
 ## API Reference
 
-### `convert(markdown: str) -> str`
+### `convert(markdown: str, config: MrkdwnConfig | None = None) -> str`
 
 Convert Markdown text to Slack mrkdwn format.
 
 **Parameters:**
 - `markdown` - Input text in Markdown format
+- `config` - Optional configuration (uses defaults if not provided)
 
 **Returns:**
 - Text converted to Slack mrkdwn format
@@ -242,6 +314,9 @@ Convert Markdown text to Slack mrkdwn format.
 
 Class for converting Markdown to mrkdwn.
 
+**Constructor:**
+- `MrkdwnConverter(config: MrkdwnConfig | None = None)`
+
 **Methods:**
 - `convert(markdown: str) -> str` - Convert Markdown text to mrkdwn
 
@@ -249,7 +324,37 @@ Class for converting Markdown to mrkdwn.
 ```python
 converter = MrkdwnConverter()
 result = converter.convert("**Hello** *World*")
+
+# With custom config
+config = MrkdwnConfig(bullet_char="-")
+converter = MrkdwnConverter(config)
+result = converter.convert("- Item")
 ```
+
+### `MrkdwnConfig`
+
+Immutable configuration dataclass for customizing conversion behavior.
+
+**Example:**
+```python
+from md2mrkdwn import MrkdwnConfig, DEFAULT_CONFIG
+
+# Create custom config
+config = MrkdwnConfig(
+    bullet_char="→",
+    header_style="plain",
+    convert_bold=False
+)
+
+# Use the default config singleton
+print(DEFAULT_CONFIG.bullet_char)  # •
+```
+
+
+## See Also
+
+- [Slack mrkdwn specification](https://api.slack.com/reference/surfaces/formatting) - Official Slack formatting documentation
+- [markdown_to_mrkdwn](https://github.com/fla9ua/markdown_to_mrkdwn) - Related project for markdown to mrkdwn conversion
 
 ## License
 
