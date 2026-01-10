@@ -143,26 +143,27 @@ print(converter.convert("- Item\n\n---"))
 
 ### Configuration Options
 
-| Option                     | Type | Default        | Description                               |
-|----------------------------|------|----------------|-------------------------------------------|
-| `bullet_char`              | str  | `•`            | Character for unordered list items        |
-| `checkbox_checked`         | str  | `☑`            | Symbol for checked task items             |
-| `checkbox_unchecked`       | str  | `☐`            | Symbol for unchecked task items           |
-| `horizontal_rule_char`     | str  | `─`            | Character for horizontal rules            |
-| `horizontal_rule_length`   | int  | `10`           | Length of horizontal rules                |
-| `header_style`             | str  | `"bold"`       | `"bold"`, `"plain"`, or `"prefix"`        |
-| `link_format`              | str  | `"slack"`      | `"slack"`, `"url_only"`, or `"text_only"` |
-| `table_mode`               | str  | `"code_block"` | `"code_block"` or `"preserve"`            |
-| `convert_bold`             | bool | `True`         | Enable/disable bold conversion            |
-| `convert_italic`           | bool | `True`         | Enable/disable italic conversion          |
-| `convert_strikethrough`    | bool | `True`         | Enable/disable strikethrough conversion   |
-| `convert_links`            | bool | `True`         | Enable/disable link conversion            |
-| `convert_images`           | bool | `True`         | Enable/disable image conversion           |
-| `convert_lists`            | bool | `True`         | Enable/disable list conversion            |
-| `convert_task_lists`       | bool | `True`         | Enable/disable task list conversion       |
-| `convert_headers`          | bool | `True`         | Enable/disable header conversion          |
-| `convert_horizontal_rules` | bool | `True`         | Enable/disable horizontal rule conversion |
-| `convert_tables`           | bool | `True`         | Enable/disable table wrapping             |
+| Option                     | Type        | Default                | Description                               |
+|----------------------------|-------------|------------------------|-------------------------------------------|
+| `bullet_char`              | str         | `•`                    | Character for unordered list items        |
+| `checkbox_checked`         | str         | `☑`                    | Symbol for checked task items             |
+| `checkbox_unchecked`       | str         | `☐`                    | Symbol for unchecked task items           |
+| `horizontal_rule_char`     | str         | `─`                    | Character for horizontal rules            |
+| `horizontal_rule_length`   | int         | `10`                   | Length of horizontal rules                |
+| `header_style`             | HeaderStyle | `HeaderStyle.BOLD`     | `BOLD`, `PLAIN`, or `PREFIX`              |
+| `link_format`              | LinkFormat  | `LinkFormat.SLACK`     | `SLACK`, `URL_ONLY`, or `TEXT_ONLY`       |
+| `table_mode`               | TableMode   | `TableMode.CODE_BLOCK` | `CODE_BLOCK` or `PRESERVE`              |
+| `strip_table_emoji`        | bool        | `True`                 | Strip emoji shortcodes from tables        |
+| `convert_bold`             | bool        | `True`                 | Enable/disable bold conversion            |
+| `convert_italic`           | bool        | `True`                 | Enable/disable italic conversion          |
+| `convert_strikethrough`    | bool        | `True`                 | Enable/disable strikethrough conversion   |
+| `convert_links`            | bool        | `True`                 | Enable/disable link conversion            |
+| `convert_images`           | bool        | `True`                 | Enable/disable image conversion           |
+| `convert_lists`            | bool        | `True`                 | Enable/disable list conversion            |
+| `convert_task_lists`       | bool        | `True`                 | Enable/disable task list conversion       |
+| `convert_headers`          | bool        | `True`                 | Enable/disable header conversion          |
+| `convert_horizontal_rules` | bool        | `True`                 | Enable/disable horizontal rule conversion |
+| `convert_tables`           | bool        | `True`                 | Enable/disable table wrapping             |
 
 ### Handling Tables
 

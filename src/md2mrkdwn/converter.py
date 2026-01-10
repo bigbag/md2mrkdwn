@@ -2,65 +2,60 @@
 
 import hashlib
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
+from enum import Enum
 
-# =============================================================================
-# Compiled regex patterns (module-level for efficiency)
-# =============================================================================
-
-# Table detection
-TABLE_ROW_PATTERN = re.compile(r"^\s*\|.+\|\s*$")
-SEPARATOR_CELL_PATTERN = re.compile(r"^:?[-\u2013\u2014\u2212]+:?$")
-
-# Markdown formatting (for stripping inside code blocks)
-BOLD_STRIP_PATTERN = re.compile(r"\*\*(.+?)\*\*")
-ITALIC_STRIP_PATTERN = re.compile(r"\*(.+?)\*")
-
-# Inline code protection
-INLINE_CODE_PATTERN = re.compile(r"`[^`]+`")
-
-# Conversion patterns
-HEADER_PATTERN = re.compile(r"^#{1,6}\s+(.+?)(?:\s+#+)?$", re.MULTILINE)
-BOLD_ITALIC_ASTERISKS_PATTERN = re.compile(r"\*\*\*(.+?)\*\*\*")
-BOLD_ITALIC_UNDERSCORES_PATTERN = re.compile(r"___(.+?)___")
-BOLD_ASTERISKS_PATTERN = re.compile(r"\*\*(.+?)\*\*")
-BOLD_UNDERSCORES_PATTERN = re.compile(r"__(.+?)__")
-ITALIC_ASTERISKS_PATTERN = re.compile(r"(?<!\*)\*([^*]+?)\*(?!\*)")
-ITALIC_UNDERSCORES_PATTERN = re.compile(r"(?<!_)_([^_]+?)_(?!_)")
-STRIKETHROUGH_PATTERN = re.compile(r"~~(.+?)~~")
-IMAGE_PATTERN = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
-LINK_PATTERN = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
-TASK_CHECKED_PATTERN = re.compile(r"^(\s*)[-*+]\s+\[x\]\s*", re.MULTILINE | re.IGNORECASE)
-TASK_UNCHECKED_PATTERN = re.compile(r"^(\s*)[-*+]\s+\[ \]\s*", re.MULTILINE)
-UNORDERED_LIST_PATTERN = re.compile(r"^(\s*)[-*+]\s+", re.MULTILINE)
-HORIZONTAL_RULE_PATTERN = re.compile(r"^[-*_]{3,}\s*$", re.MULTILINE)
-
-# =============================================================================
-# Constants
-# =============================================================================
-
-# Unicode characters for replacements
-BULLET = "•"  # U+2022
-CHECKBOX_CHECKED = "☑"  # U+2611
-CHECKBOX_UNCHECKED = "☐"  # U+2610
-HORIZONTAL_LINE = "─"  # U+2500
-
-# Temporary placeholders to prevent pattern interference
-_BOLD_PLACEHOLDER = "\x00BOLD\x00"
-_ITALIC_PLACEHOLDER = "\x00ITALIC\x00"
+from md2mrkdwn.patterns import (
+    BOLD_ASTERISKS_PATTERN,
+    BOLD_ITALIC_ASTERISKS_PATTERN,
+    BOLD_ITALIC_UNDERSCORES_PATTERN,
+    BOLD_PLACEHOLDER,
+    BOLD_STRIP_PATTERN,
+    BOLD_UNDERSCORES_PATTERN,
+    BULLET,
+    CHECKBOX_CHECKED,
+    CHECKBOX_UNCHECKED,
+    EMOJI_SHORTCODE_PATTERN,
+    HEADER_PATTERN,
+    HORIZONTAL_LINE,
+    HORIZONTAL_RULE_PATTERN,
+    IMAGE_PATTERN,
+    INLINE_CODE_PATTERN,
+    ITALIC_ASTERISKS_PATTERN,
+    ITALIC_PLACEHOLDER,
+    ITALIC_STRIP_PATTERN,
+    ITALIC_UNDERSCORES_PATTERN,
+    LINK_PATTERN,
+    SEPARATOR_CELL_PATTERN,
+    STRIKETHROUGH_PATTERN,
+    TABLE_ROW_PATTERN,
+    TASK_CHECKED_PATTERN,
+    TASK_UNCHECKED_PATTERN,
+    UNORDERED_LIST_PATTERN,
+)
 
 
-# =============================================================================
-# Configuration
-# =============================================================================
+class HeaderStyle(str, Enum):
+    BOLD = "bold"
+    PLAIN = "plain"
+    PREFIX = "prefix"
+
+
+class LinkFormat(str, Enum):
+    SLACK = "slack"
+    URL_ONLY = "url_only"
+    TEXT_ONLY = "text_only"
+
+
+class TableMode(str, Enum):
+    CODE_BLOCK = "code_block"
+    PRESERVE = "preserve"
 
 
 @dataclass(frozen=True, slots=True)
 class MrkdwnConfig:
-    """Configuration for Markdown to mrkdwn conversion.
-
-    All parameters are optional - defaults match current behavior.
-    """
+    """Configuration for Markdown to mrkdwn conversion."""
 
     # Character/Symbol configuration
     bullet_char: str = BULLET
@@ -70,9 +65,10 @@ class MrkdwnConfig:
     horizontal_rule_length: int = 10
 
     # Mode settings
-    header_style: str = "bold"  # "bold", "plain", "prefix"
-    link_format: str = "slack"  # "slack", "url_only", "text_only"
-    table_mode: str = "code_block"  # "code_block", "preserve"
+    header_style: HeaderStyle = HeaderStyle.BOLD
+    link_format: LinkFormat = LinkFormat.SLACK
+    table_mode: TableMode = TableMode.CODE_BLOCK
+    strip_table_emoji: bool = True
 
     # Element enable/disable flags
     convert_bold: bool = True
@@ -88,15 +84,6 @@ class MrkdwnConfig:
 
     def __post_init__(self) -> None:
         """Validate configuration values."""
-        validators = {
-            "header_style": {"bold", "plain", "prefix"},
-            "link_format": {"slack", "url_only", "text_only"},
-            "table_mode": {"code_block", "preserve"},
-        }
-        for field, valid_values in validators.items():
-            value = getattr(self, field)
-            if value not in valid_values:
-                raise ValueError(f"{field} must be one of {valid_values}, got '{value}'")
 
         if self.horizontal_rule_length < 1:
             raise ValueError("horizontal_rule_length must be at least 1")
@@ -201,12 +188,12 @@ class MrkdwnConverter:
         if config.convert_bold or config.convert_italic:
             # Compute wrapper based on which conversions are enabled
             if config.convert_bold and config.convert_italic:
-                open_wrap = f"{_BOLD_PLACEHOLDER}{_ITALIC_PLACEHOLDER}"
-                close_wrap = f"{_ITALIC_PLACEHOLDER}{_BOLD_PLACEHOLDER}"
+                open_wrap = f"{BOLD_PLACEHOLDER}{ITALIC_PLACEHOLDER}"
+                close_wrap = f"{ITALIC_PLACEHOLDER}{BOLD_PLACEHOLDER}"
             elif config.convert_bold:
-                open_wrap = close_wrap = _BOLD_PLACEHOLDER
+                open_wrap = close_wrap = BOLD_PLACEHOLDER
             else:  # only italic
-                open_wrap = close_wrap = _ITALIC_PLACEHOLDER
+                open_wrap = close_wrap = ITALIC_PLACEHOLDER
 
             def wrap_bold_italic(m: re.Match[str]) -> str:
                 return f"{open_wrap}{m.group(1)}{close_wrap}"
@@ -217,22 +204,22 @@ class MrkdwnConverter:
         # Step 2: Convert bold (before italic to prevent interference)
         if config.convert_bold:
             line = BOLD_ASTERISKS_PATTERN.sub(
-                lambda m: f"{_BOLD_PLACEHOLDER}{m.group(1)}{_BOLD_PLACEHOLDER}",
+                lambda m: f"{BOLD_PLACEHOLDER}{m.group(1)}{BOLD_PLACEHOLDER}",
                 line,
             )
             line = BOLD_UNDERSCORES_PATTERN.sub(
-                lambda m: f"{_BOLD_PLACEHOLDER}{m.group(1)}{_BOLD_PLACEHOLDER}",
+                lambda m: f"{BOLD_PLACEHOLDER}{m.group(1)}{BOLD_PLACEHOLDER}",
                 line,
             )
 
         # Step 3: Convert italic
         if config.convert_italic:
             line = ITALIC_ASTERISKS_PATTERN.sub(
-                lambda m: f"{_ITALIC_PLACEHOLDER}{m.group(1)}{_ITALIC_PLACEHOLDER}",
+                lambda m: f"{ITALIC_PLACEHOLDER}{m.group(1)}{ITALIC_PLACEHOLDER}",
                 line,
             )
             line = ITALIC_UNDERSCORES_PATTERN.sub(
-                lambda m: f"{_ITALIC_PLACEHOLDER}{m.group(1)}{_ITALIC_PLACEHOLDER}",
+                lambda m: f"{ITALIC_PLACEHOLDER}{m.group(1)}{ITALIC_PLACEHOLDER}",
                 line,
             )
 
@@ -250,11 +237,11 @@ class MrkdwnConverter:
             line = IMAGE_PATTERN.sub(replacer, line)
 
         if config.convert_links:
-            if config.link_format == "slack":
+            if config.link_format == LinkFormat.SLACK:
                 line = LINK_PATTERN.sub(r"<\2|\1>", line)
-            elif config.link_format == "url_only":
+            elif config.link_format == LinkFormat.URL_ONLY:
                 line = LINK_PATTERN.sub(r"<\2>", line)
-            elif config.link_format == "text_only":
+            elif config.link_format == LinkFormat.TEXT_ONLY:
                 line = LINK_PATTERN.sub(r"\1", line)
 
         if config.convert_task_lists:
@@ -273,31 +260,31 @@ class MrkdwnConverter:
             line = HORIZONTAL_RULE_PATTERN.sub(hr, line)
 
         if config.convert_headers:
-            if config.header_style == "bold":
+            if config.header_style == HeaderStyle.BOLD:
 
                 def convert_header(m: re.Match[str]) -> str:
                     content = m.group(1)
                     # Strip any existing bold/italic placeholders to avoid doubling
-                    content = content.replace(_BOLD_PLACEHOLDER, "")
-                    content = content.replace(_ITALIC_PLACEHOLDER, "")
-                    return f"{_BOLD_PLACEHOLDER}{content}{_BOLD_PLACEHOLDER}"
+                    content = content.replace(BOLD_PLACEHOLDER, "")
+                    content = content.replace(ITALIC_PLACEHOLDER, "")
+                    return f"{BOLD_PLACEHOLDER}{content}{BOLD_PLACEHOLDER}"
 
                 line = HEADER_PATTERN.sub(convert_header, line)
-            elif config.header_style == "plain":
+            elif config.header_style == HeaderStyle.PLAIN:
 
                 def strip_header(m: re.Match[str]) -> str:
                     content = m.group(1)
                     # Strip any existing bold/italic placeholders
-                    content = content.replace(_BOLD_PLACEHOLDER, "")
-                    content = content.replace(_ITALIC_PLACEHOLDER, "")
+                    content = content.replace(BOLD_PLACEHOLDER, "")
+                    content = content.replace(ITALIC_PLACEHOLDER, "")
                     return content
 
                 line = HEADER_PATTERN.sub(strip_header, line)
-            # "prefix" - leave unchanged
+            # HeaderStyle.PREFIX - leave unchanged
 
         # Step 5: Replace placeholders with final mrkdwn characters
-        line = line.replace(_BOLD_PLACEHOLDER, "*")
-        line = line.replace(_ITALIC_PLACEHOLDER, "_")
+        line = line.replace(BOLD_PLACEHOLDER, "*")
+        line = line.replace(ITALIC_PLACEHOLDER, "_")
 
         # Step 6: Restore inline code segments
         for placeholder, code in code_segments.items():
@@ -310,7 +297,7 @@ class MrkdwnConverter:
         return line
 
     @staticmethod
-    def _create_placeholder_replacer(segments: dict[str, str], prefix: str) -> callable:
+    def _create_placeholder_replacer(segments: dict[str, str], prefix: str) -> Callable[[re.Match[str]], str]:
         """Create a replacer function for placeholder protection.
 
         Args:
@@ -357,7 +344,7 @@ class MrkdwnConverter:
             Text with tables wrapped in code blocks via placeholders
         """
         # Skip if tables disabled or preserve mode
-        if not self._config.convert_tables or self._config.table_mode == "preserve":
+        if not self._config.convert_tables or self._config.table_mode == TableMode.PRESERVE:
             return text
 
         lines = text.split("\n")
@@ -485,30 +472,24 @@ class MrkdwnConverter:
         return bool(cells) and all(SEPARATOR_CELL_PATTERN.match(cell) for cell in cells)
 
     def _wrap_table(self, table_lines: list[str]) -> str:
-        """Wrap table lines in a code block.
-
-        Strips markdown formatting from table content for clean display.
-
-        Args:
-            table_lines: Lines of the table
-
-        Returns:
-            Table wrapped in code block
-        """
-        clean_lines = [self._strip_markdown(line) for line in table_lines]
+        """Wrap table lines in a code block."""
+        clean_lines = []
+        for line in table_lines:
+            line = self._strip_markdown(line)
+            line = self._process_emoji(line)
+            clean_lines.append(line)
         return "```\n" + "\n".join(clean_lines) + "\n```"
 
     def _strip_markdown(self, text: str) -> str:
-        """Strip markdown bold/italic formatting from text.
-
-        Args:
-            text: Text with potential markdown formatting
-
-        Returns:
-            Text with formatting removed
-        """
+        """Strip markdown bold/italic formatting from text."""
         text = BOLD_STRIP_PATTERN.sub(r"\1", text)
         text = ITALIC_STRIP_PATTERN.sub(r"\1", text)
+        return text
+
+    def _process_emoji(self, text: str) -> str:
+        """Strip emoji shortcodes if configured."""
+        if self._config.strip_table_emoji:
+            return EMOJI_SHORTCODE_PATTERN.sub("", text)
         return text
 
     def _generate_placeholder(self, content: str) -> str:

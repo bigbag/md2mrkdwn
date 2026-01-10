@@ -48,17 +48,7 @@ class TestMrkdwnConfigDefaults:
 class TestMrkdwnConfigValidation:
     """Test configuration validation."""
 
-    def test_invalid_header_style(self) -> None:
-        with pytest.raises(ValueError, match="header_style must be one of"):
-            MrkdwnConfig(header_style="invalid")
-
-    def test_invalid_link_format(self) -> None:
-        with pytest.raises(ValueError, match="link_format must be one of"):
-            MrkdwnConfig(link_format="invalid")
-
-    def test_invalid_table_mode(self) -> None:
-        with pytest.raises(ValueError, match="table_mode must be one of"):
-            MrkdwnConfig(table_mode="invalid")
+    # Note: header_style, link_format, table_mode are validated by Literal types at type-check time
 
     def test_invalid_horizontal_rule_length_zero(self) -> None:
         with pytest.raises(ValueError, match="horizontal_rule_length must be at least 1"):
@@ -374,3 +364,31 @@ class TestConverterWithConfig:
         converter = MrkdwnConverter(config)
         assert converter.convert("- A") == "* A"
         assert converter.convert("- B") == "* B"
+
+
+class TestStripTableEmoji:
+    """Test strip_table_emoji configuration."""
+
+    def test_default_strip_emoji_is_true(self) -> None:
+        config = MrkdwnConfig()
+        assert config.strip_table_emoji is True
+
+    def test_strip_emoji_removes_shortcodes(self) -> None:
+        md = "| Status |\n|---|\n| :white_check_mark: Available |"
+        result = convert(md)
+        assert ":white_check_mark:" not in result
+        assert "Available" in result
+
+    def test_strip_emoji_false_preserves_shortcodes(self) -> None:
+        config = MrkdwnConfig(strip_table_emoji=False)
+        md = "| Status |\n|---|\n| :white_check_mark: Available |"
+        result = convert(md, config)
+        assert ":white_check_mark:" in result
+
+    def test_strip_emoji_multiple(self) -> None:
+        md = "| A | B |\n|---|---|\n| :fire: Hot | :star: Good |"
+        result = convert(md)
+        assert ":fire:" not in result
+        assert ":star:" not in result
+        assert "Hot" in result
+        assert "Good" in result

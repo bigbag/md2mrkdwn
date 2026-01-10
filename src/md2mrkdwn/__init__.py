@@ -2,16 +2,22 @@
 
 from md2mrkdwn.converter import (
     DEFAULT_CONFIG,
+    HeaderStyle,
+    LinkFormat,
     MrkdwnConfig,
     MrkdwnConverter,
+    TableMode,
     convert,
 )
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 __all__ = [
     "MrkdwnConverter",
     "MrkdwnConfig",
     "DEFAULT_CONFIG",
+    "HeaderStyle",
+    "LinkFormat",
+    "TableMode",
     "convert",
     "__version__",
 ]
