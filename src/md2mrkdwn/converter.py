@@ -482,6 +482,10 @@ class MrkdwnConverter:
                 line = self._convert_table_links(line)
             line = self._process_emoji(line)
             clean_lines.append(line)
+
+        # Realign columns after all transformations
+        clean_lines = self._align_table_columns(clean_lines)
+
         return "```\n" + "\n".join(clean_lines) + "\n```"
 
     def _strip_markdown(self, text: str) -> str:
@@ -504,8 +508,45 @@ class MrkdwnConverter:
     def _process_emoji(self, text: str) -> str:
         """Strip emoji shortcodes if configured."""
         if self._config.strip_table_emoji:
-            return EMOJI_SHORTCODE_PATTERN.sub("", text)
+            text = EMOJI_SHORTCODE_PATTERN.sub("", text)
+            text = re.sub(r"  +", " ", text)  # Collapse multiple spaces
         return text
+
+    def _align_table_columns(self, table_lines: list[str]) -> list[str]:
+        """Realign table columns after content transformation."""
+        if len(table_lines) < 2:
+            return table_lines
+
+        # Protect pipes inside angle brackets (slack links) before parsing
+        pipe_placeholder = "\x00PIPE\x00"
+        protected_lines = []
+        for line in table_lines:
+            # Replace | inside <...> with placeholder
+            protected = re.sub(r"<([^>]*)\|([^>]*)>", rf"<\1{pipe_placeholder}\2>", line)
+            protected_lines.append(protected)
+
+        # Parse all rows into cells
+        parsed_rows = [self._parse_row(line) for line in protected_lines]
+        col_count = len(parsed_rows[0]) if parsed_rows else 0
+
+        # Calculate max width per column (skip separator row at index 1)
+        col_widths = []
+        for col in range(col_count):
+            widths = [len(row[col]) for i, row in enumerate(parsed_rows) if i != 1 and col < len(row)]
+            col_widths.append(max(widths) if widths else 3)
+
+        # Rebuild aligned table
+        result = []
+        for i, cells in enumerate(parsed_rows):
+            if i == 1:  # Separator row
+                row = "| " + " | ".join("-" * w for w in col_widths) + " |"
+            else:
+                padded = [cells[j].ljust(col_widths[j]) for j in range(len(cells))]
+                row = "| " + " | ".join(padded) + " |"
+            # Restore pipes in slack links
+            row = row.replace(pipe_placeholder, "|")
+            result.append(row)
+        return result
 
     def _generate_placeholder(self, content: str) -> str:
         """Generate a unique placeholder for content.

@@ -269,7 +269,7 @@ class TestTables:
         converter = MrkdwnConverter(config)
         md = "| Name | Link |\n|---|---|\n| App | [click](https://example.com) |"
         result = converter.convert(md)
-        assert "| App | click |" in result
+        assert "click" in result
         assert "https://example.com" not in result
 
     def test_table_with_links_disabled(self) -> None:
@@ -281,6 +281,25 @@ class TestTables:
         md = "| Name | Link |\n|---|---|\n| App | [click](https://example.com) |"
         result = converter.convert(md)
         assert "[click](https://example.com)" in result
+
+    def test_table_column_alignment_preserved(self, converter: MrkdwnConverter) -> None:
+        """Test table columns stay aligned after transformations."""
+        md = "| Name | Link |\n|---|---|\n| App | [click](https://example.com) |"
+        result = converter.convert(md)
+        lines = result.strip().split("\n")
+        # Skip ``` markers, check table rows have consistent structure
+        table_lines = [line for line in lines if line.startswith("|")]
+        # All data rows should have same length (aligned)
+        assert len(table_lines) >= 2
+        assert len(table_lines[0]) == len(table_lines[-1])
+
+    def test_table_column_alignment_after_emoji_strip(self, converter: MrkdwnConverter) -> None:
+        """Test table columns stay aligned after emoji stripping."""
+        md = "| Status | Note |\n|---|---|\n| :check: OK | Test |"
+        result = converter.convert(md)
+        # Should not have double spaces from emoji removal
+        assert "|  OK" not in result
+        assert "| OK" in result
 
 
 class TestHorizontalRules:
