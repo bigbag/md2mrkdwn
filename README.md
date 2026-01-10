@@ -153,7 +153,9 @@ print(converter.convert("- Item\n\n---"))
 | `header_style`             | HeaderStyle | `HeaderStyle.BOLD`     | `BOLD`, `PLAIN`, or `PREFIX`              |
 | `link_format`              | LinkFormat  | `LinkFormat.SLACK`     | `SLACK`, `URL_ONLY`, or `TEXT_ONLY`       |
 | `table_mode`               | TableMode   | `TableMode.CODE_BLOCK` | `CODE_BLOCK` or `PRESERVE`              |
+| `table_link_format`        | LinkFormat  | `LinkFormat.URL_ONLY`  | Link format inside tables                 |
 | `strip_table_emoji`        | bool        | `True`                 | Strip emoji shortcodes from tables        |
+| `convert_table_links`      | bool        | `True`                 | Enable/disable link conversion in tables  |
 | `convert_bold`             | bool        | `True`                 | Enable/disable bold conversion            |
 | `convert_italic`           | bool        | `True`                 | Enable/disable italic conversion          |
 | `convert_strikethrough`    | bool        | `True`                 | Enable/disable strikethrough conversion   |
@@ -190,6 +192,35 @@ Output:
 | Alice | 30 |
 | Bob | 25 |
 ```
+```
+
+#### Links in Tables
+
+Links inside tables are converted to URL-only format by default (different from the global `link_format` setting):
+
+```python
+from md2mrkdwn import convert, MrkdwnConfig, LinkFormat
+
+markdown = """
+| App | Link |
+|-----|------|
+| Example | [Visit](https://example.com) |
+"""
+
+# Default: URL only
+print(convert(markdown))
+# | App | Link |
+# | Example | https://example.com |
+
+# Slack format
+config = MrkdwnConfig(table_link_format=LinkFormat.SLACK)
+print(convert(markdown, config))
+# | Example | <https://example.com|Visit> |
+
+# Text only (link text, no URL)
+config = MrkdwnConfig(table_link_format=LinkFormat.TEXT_ONLY)
+print(convert(markdown, config))
+# | Example | Visit |
 ```
 
 ## Conversion Reference

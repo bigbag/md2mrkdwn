@@ -68,7 +68,9 @@ class MrkdwnConfig:
     header_style: HeaderStyle = HeaderStyle.BOLD
     link_format: LinkFormat = LinkFormat.SLACK
     table_mode: TableMode = TableMode.CODE_BLOCK
+    table_link_format: LinkFormat = LinkFormat.URL_ONLY
     strip_table_emoji: bool = True
+    convert_table_links: bool = True
 
     # Element enable/disable flags
     convert_bold: bool = True
@@ -476,6 +478,8 @@ class MrkdwnConverter:
         clean_lines = []
         for line in table_lines:
             line = self._strip_markdown(line)
+            if self._config.convert_table_links:
+                line = self._convert_table_links(line)
             line = self._process_emoji(line)
             clean_lines.append(line)
         return "```\n" + "\n".join(clean_lines) + "\n```"
@@ -484,6 +488,17 @@ class MrkdwnConverter:
         """Strip markdown bold/italic formatting from text."""
         text = BOLD_STRIP_PATTERN.sub(r"\1", text)
         text = ITALIC_STRIP_PATTERN.sub(r"\1", text)
+        return text
+
+    def _convert_table_links(self, text: str) -> str:
+        """Convert markdown links in table cells based on table_link_format config."""
+        fmt = self._config.table_link_format
+        if fmt == LinkFormat.SLACK:
+            return LINK_PATTERN.sub(r"<\2|\1>", text)
+        elif fmt == LinkFormat.URL_ONLY:
+            return LINK_PATTERN.sub(r"\2", text)
+        elif fmt == LinkFormat.TEXT_ONLY:
+            return LINK_PATTERN.sub(r"\1", text)
         return text
 
     def _process_emoji(self, text: str) -> str:

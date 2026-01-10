@@ -244,6 +244,44 @@ class TestTables:
         # Just converted as regular text (pipes preserved)
         assert "| A | B |" in result
 
+    def test_table_with_links_default(self, converter: MrkdwnConverter) -> None:
+        """Test links in table cells are converted to URL only by default."""
+        md = "| Name | Link |\n|---|---|\n| App | [click](https://example.com) |"
+        result = converter.convert(md)
+        assert "https://example.com" in result
+        assert "[click]" not in result
+
+    def test_table_with_links_slack_format(self) -> None:
+        """Test links in table cells with SLACK format."""
+        from md2mrkdwn import LinkFormat, MrkdwnConfig
+
+        config = MrkdwnConfig(table_link_format=LinkFormat.SLACK)
+        converter = MrkdwnConverter(config)
+        md = "| Name | Link |\n|---|---|\n| App | [click](https://example.com) |"
+        result = converter.convert(md)
+        assert "<https://example.com|click>" in result
+
+    def test_table_with_links_text_only(self) -> None:
+        """Test links in table cells with TEXT_ONLY format."""
+        from md2mrkdwn import LinkFormat, MrkdwnConfig
+
+        config = MrkdwnConfig(table_link_format=LinkFormat.TEXT_ONLY)
+        converter = MrkdwnConverter(config)
+        md = "| Name | Link |\n|---|---|\n| App | [click](https://example.com) |"
+        result = converter.convert(md)
+        assert "| App | click |" in result
+        assert "https://example.com" not in result
+
+    def test_table_with_links_disabled(self) -> None:
+        """Test links in table cells remain as markdown when disabled."""
+        from md2mrkdwn import MrkdwnConfig
+
+        config = MrkdwnConfig(convert_table_links=False)
+        converter = MrkdwnConverter(config)
+        md = "| Name | Link |\n|---|---|\n| App | [click](https://example.com) |"
+        result = converter.convert(md)
+        assert "[click](https://example.com)" in result
+
 
 class TestHorizontalRules:
     """Test horizontal rule conversions."""
