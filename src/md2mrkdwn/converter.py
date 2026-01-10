@@ -88,17 +88,15 @@ class MrkdwnConfig:
 
     def __post_init__(self) -> None:
         """Validate configuration values."""
-        valid_header_styles = {"bold", "plain", "prefix"}
-        if self.header_style not in valid_header_styles:
-            raise ValueError(f"header_style must be one of {valid_header_styles}, got '{self.header_style}'")
-
-        valid_link_formats = {"slack", "url_only", "text_only"}
-        if self.link_format not in valid_link_formats:
-            raise ValueError(f"link_format must be one of {valid_link_formats}, got '{self.link_format}'")
-
-        valid_table_modes = {"code_block", "preserve"}
-        if self.table_mode not in valid_table_modes:
-            raise ValueError(f"table_mode must be one of {valid_table_modes}, got '{self.table_mode}'")
+        validators = {
+            "header_style": {"bold", "plain", "prefix"},
+            "link_format": {"slack", "url_only", "text_only"},
+            "table_mode": {"code_block", "preserve"},
+        }
+        for field, valid_values in validators.items():
+            value = getattr(self, field)
+            if value not in valid_values:
+                raise ValueError(f"{field} must be one of {valid_values}, got '{value}'")
 
         if self.horizontal_rule_length < 1:
             raise ValueError("horizontal_rule_length must be at least 1")
@@ -200,35 +198,21 @@ class MrkdwnConverter:
             line, code_segments = self._protect_inline_code(line)
 
         # Step 1: Convert bold+italic first (uses both asterisks and underscores)
-        if config.convert_bold and config.convert_italic:
-            line = BOLD_ITALIC_ASTERISKS_PATTERN.sub(
-                lambda m: f"{_BOLD_PLACEHOLDER}{_ITALIC_PLACEHOLDER}{m.group(1)}{_ITALIC_PLACEHOLDER}{_BOLD_PLACEHOLDER}",
-                line,
-            )
-            line = BOLD_ITALIC_UNDERSCORES_PATTERN.sub(
-                lambda m: f"{_BOLD_PLACEHOLDER}{_ITALIC_PLACEHOLDER}{m.group(1)}{_ITALIC_PLACEHOLDER}{_BOLD_PLACEHOLDER}",
-                line,
-            )
-        elif config.convert_bold:
-            # Only bold - strip the extra markers
-            line = BOLD_ITALIC_ASTERISKS_PATTERN.sub(
-                lambda m: f"{_BOLD_PLACEHOLDER}{m.group(1)}{_BOLD_PLACEHOLDER}",
-                line,
-            )
-            line = BOLD_ITALIC_UNDERSCORES_PATTERN.sub(
-                lambda m: f"{_BOLD_PLACEHOLDER}{m.group(1)}{_BOLD_PLACEHOLDER}",
-                line,
-            )
-        elif config.convert_italic:
-            # Only italic - strip the extra markers
-            line = BOLD_ITALIC_ASTERISKS_PATTERN.sub(
-                lambda m: f"{_ITALIC_PLACEHOLDER}{m.group(1)}{_ITALIC_PLACEHOLDER}",
-                line,
-            )
-            line = BOLD_ITALIC_UNDERSCORES_PATTERN.sub(
-                lambda m: f"{_ITALIC_PLACEHOLDER}{m.group(1)}{_ITALIC_PLACEHOLDER}",
-                line,
-            )
+        if config.convert_bold or config.convert_italic:
+            # Compute wrapper based on which conversions are enabled
+            if config.convert_bold and config.convert_italic:
+                open_wrap = f"{_BOLD_PLACEHOLDER}{_ITALIC_PLACEHOLDER}"
+                close_wrap = f"{_ITALIC_PLACEHOLDER}{_BOLD_PLACEHOLDER}"
+            elif config.convert_bold:
+                open_wrap = close_wrap = _BOLD_PLACEHOLDER
+            else:  # only italic
+                open_wrap = close_wrap = _ITALIC_PLACEHOLDER
+
+            def wrap_bold_italic(m: re.Match[str]) -> str:
+                return f"{open_wrap}{m.group(1)}{close_wrap}"
+
+            line = BOLD_ITALIC_ASTERISKS_PATTERN.sub(wrap_bold_italic, line)
+            line = BOLD_ITALIC_UNDERSCORES_PATTERN.sub(wrap_bold_italic, line)
 
         # Step 2: Convert bold (before italic to prevent interference)
         if config.convert_bold:
@@ -262,16 +246,8 @@ class MrkdwnConverter:
             line = IMAGE_PATTERN.sub(r"<\2>", line)
         elif config.convert_links:
             # Protect images from link pattern when images disabled but links enabled
-            counter = 0
-
-            def save_image(match: re.Match[str]) -> str:
-                nonlocal counter
-                placeholder = f"%%IMG_{counter}%%"
-                image_segments[placeholder] = match.group(0)
-                counter += 1
-                return placeholder
-
-            line = IMAGE_PATTERN.sub(save_image, line)
+            replacer = self._create_placeholder_replacer(image_segments, "IMG")
+            line = IMAGE_PATTERN.sub(replacer, line)
 
         if config.convert_links:
             if config.link_format == "slack":
@@ -333,6 +309,27 @@ class MrkdwnConverter:
 
         return line
 
+    @staticmethod
+    def _create_placeholder_replacer(segments: dict[str, str], prefix: str) -> callable:
+        """Create a replacer function for placeholder protection.
+
+        Args:
+            segments: Dict to store placeholder -> original content mapping
+            prefix: Prefix for placeholder names (e.g., "CODE", "IMG")
+
+        Returns:
+            Replacer function for use with re.sub
+        """
+        counter = [0]  # Use list for mutable counter in closure
+
+        def replacer(match: re.Match[str]) -> str:
+            placeholder = f"%%{prefix}_{counter[0]}%%"
+            segments[placeholder] = match.group(0)
+            counter[0] += 1
+            return placeholder
+
+        return replacer
+
     def _protect_inline_code(self, line: str) -> tuple[str, dict[str, str]]:
         """Protect inline code segments with placeholders.
 
@@ -343,16 +340,8 @@ class MrkdwnConverter:
             Tuple of (protected line, mapping of placeholder to code)
         """
         code_segments: dict[str, str] = {}
-        counter = 0
-
-        def save_code(match: re.Match[str]) -> str:
-            nonlocal counter
-            placeholder = f"%%CODE_{counter}%%"
-            code_segments[placeholder] = match.group(0)
-            counter += 1
-            return placeholder
-
-        protected_line = INLINE_CODE_PATTERN.sub(save_code, line)
+        replacer = self._create_placeholder_replacer(code_segments, "CODE")
+        protected_line = INLINE_CODE_PATTERN.sub(replacer, line)
         return protected_line, code_segments
 
     def _process_tables(self, text: str) -> str:
@@ -393,28 +382,19 @@ class MrkdwnConverter:
                 continue
 
             # Check for potential table start
-            if not TABLE_ROW_PATTERN.match(line):
+            if not self._is_table_line(line):
                 result_lines.append(line)
                 i += 1
                 continue
 
-            # Collect consecutive table-like lines
-            table_lines = [line]
-            j = i + 1
-
-            while j < len(lines) and TABLE_ROW_PATTERN.match(lines[j]):
-                table_lines.append(lines[j])
-                j += 1
-
-            # Validate as a proper table (header + separator + data)
+            # Collect and validate table
+            table_lines = self._collect_table_lines(lines, i)
             if len(table_lines) >= 2 and self._is_valid_table(table_lines):
-                # Create wrapped table
                 wrapped = self._wrap_table(table_lines)
-                # Generate unique placeholder
                 placeholder = self._generate_placeholder(wrapped)
                 self._table_placeholders[placeholder] = wrapped
                 result_lines.append(placeholder)
-                i = j
+                i += len(table_lines)
                 continue
 
             # Not a valid table
@@ -422,6 +402,35 @@ class MrkdwnConverter:
             i += 1
 
         return "\n".join(result_lines)
+
+    @staticmethod
+    def _is_table_line(line: str) -> bool:
+        """Check if a line could be part of a markdown table.
+
+        Args:
+            line: Line to check
+
+        Returns:
+            True if line matches table row pattern
+        """
+        return TABLE_ROW_PATTERN.match(line) is not None
+
+    def _collect_table_lines(self, lines: list[str], start_idx: int) -> list[str]:
+        """Collect consecutive table-like lines starting from an index.
+
+        Args:
+            lines: All lines
+            start_idx: Index to start collecting from
+
+        Returns:
+            List of consecutive table-like lines
+        """
+        table_lines = [lines[start_idx]]
+        j = start_idx + 1
+        while j < len(lines) and self._is_table_line(lines[j]):
+            table_lines.append(lines[j])
+            j += 1
+        return table_lines
 
     def _is_valid_table(self, table_lines: list[str]) -> bool:
         """Check if lines form a valid markdown table.

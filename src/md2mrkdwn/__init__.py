@@ -7,7 +7,7 @@ from md2mrkdwn.converter import (
     convert,
 )
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __all__ = [
     "MrkdwnConverter",
     "MrkdwnConfig",
