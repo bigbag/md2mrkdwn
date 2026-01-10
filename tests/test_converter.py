@@ -70,6 +70,18 @@ class TestHeaders:
         assert "*First*" in result
         assert "*Second*" in result
 
+    def test_header_with_bold(self, converter: MrkdwnConverter) -> None:
+        """Test header containing bold text."""
+        assert converter.convert("# **Bold Title**") == "*Bold Title*"
+
+    def test_header_with_italic(self, converter: MrkdwnConverter) -> None:
+        """Test header containing italic text."""
+        assert converter.convert("# *Italic Title*") == "*Italic Title*"
+
+    def test_header_with_bold_italic(self, converter: MrkdwnConverter) -> None:
+        """Test header containing bold+italic text."""
+        assert converter.convert("# ***Bold Italic***") == "*Bold Italic*"
+
 
 class TestLinks:
     """Test link conversions."""

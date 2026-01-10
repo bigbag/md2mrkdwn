@@ -298,12 +298,25 @@ class MrkdwnConverter:
 
         if config.convert_headers:
             if config.header_style == "bold":
-                line = HEADER_PATTERN.sub(
-                    lambda m: f"{_BOLD_PLACEHOLDER}{m.group(1)}{_BOLD_PLACEHOLDER}",
-                    line,
-                )
+
+                def convert_header(m: re.Match[str]) -> str:
+                    content = m.group(1)
+                    # Strip any existing bold/italic placeholders to avoid doubling
+                    content = content.replace(_BOLD_PLACEHOLDER, "")
+                    content = content.replace(_ITALIC_PLACEHOLDER, "")
+                    return f"{_BOLD_PLACEHOLDER}{content}{_BOLD_PLACEHOLDER}"
+
+                line = HEADER_PATTERN.sub(convert_header, line)
             elif config.header_style == "plain":
-                line = HEADER_PATTERN.sub(r"\1", line)
+
+                def strip_header(m: re.Match[str]) -> str:
+                    content = m.group(1)
+                    # Strip any existing bold/italic placeholders
+                    content = content.replace(_BOLD_PLACEHOLDER, "")
+                    content = content.replace(_ITALIC_PLACEHOLDER, "")
+                    return content
+
+                line = HEADER_PATTERN.sub(strip_header, line)
             # "prefix" - leave unchanged
 
         # Step 5: Replace placeholders with final mrkdwn characters
