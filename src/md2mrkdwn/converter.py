@@ -94,11 +94,6 @@ class MrkdwnConfig:
 DEFAULT_CONFIG = MrkdwnConfig()
 
 
-# =============================================================================
-# Converter class
-# =============================================================================
-
-
 class MrkdwnConverter:
     """Convert Markdown to Slack mrkdwn format.
 
@@ -129,7 +124,6 @@ class MrkdwnConverter:
         if not markdown:
             return markdown
 
-        # Reset state
         self._in_code_block = False
         self._table_placeholders = {}
 
@@ -143,19 +137,16 @@ class MrkdwnConverter:
         result_lines = []
 
         for line in lines:
-            # Check for code block markers
             stripped = line.strip()
             if stripped.startswith("```"):
                 self._in_code_block = not self._in_code_block
                 result_lines.append(line)
                 continue
 
-            # Skip conversion inside code blocks
             if self._in_code_block:
                 result_lines.append(line)
                 continue
 
-            # Apply conversion patterns
             converted_line = self._apply_patterns(line)
             result_lines.append(converted_line)
 
@@ -345,7 +336,6 @@ class MrkdwnConverter:
         Returns:
             Text with tables wrapped in code blocks via placeholders
         """
-        # Skip if tables disabled or preserve mode
         if not self._config.convert_tables or self._config.table_mode == TableMode.PRESERVE:
             return text
 
@@ -357,26 +347,22 @@ class MrkdwnConverter:
         while i < len(lines):
             line = lines[i]
 
-            # Track code block state
             if line.strip().startswith("```"):
                 in_code_block = not in_code_block
                 result_lines.append(line)
                 i += 1
                 continue
 
-            # Skip table detection inside code blocks
             if in_code_block:
                 result_lines.append(line)
                 i += 1
                 continue
 
-            # Check for potential table start
             if not self._is_table_line(line):
                 result_lines.append(line)
                 i += 1
                 continue
 
-            # Collect and validate table
             table_lines = self._collect_table_lines(lines, i)
             if len(table_lines) >= 2 and self._is_valid_table(table_lines):
                 wrapped = self._wrap_table(table_lines)
@@ -386,7 +372,6 @@ class MrkdwnConverter:
                 i += len(table_lines)
                 continue
 
-            # Not a valid table
             result_lines.append(line)
             i += 1
 
@@ -499,11 +484,11 @@ class MrkdwnConverter:
         fmt = self._config.table_link_format
         if fmt == LinkFormat.SLACK:
             return LINK_PATTERN.sub(r"<\2|\1>", text)
-        elif fmt == LinkFormat.URL_ONLY:
+        if fmt == LinkFormat.URL_ONLY:
             return LINK_PATTERN.sub(r"\2", text)
-        elif fmt == LinkFormat.TEXT_ONLY:
+        if fmt == LinkFormat.TEXT_ONLY:
             return LINK_PATTERN.sub(r"\1", text)
-        return text
+        raise ValueError(f"Unknown LinkFormat: {fmt}")
 
     def _process_emoji(self, text: str) -> str:
         """Strip emoji shortcodes if configured."""
@@ -521,11 +506,9 @@ class MrkdwnConverter:
         pipe_placeholder = "\x00PIPE\x00"
         protected_lines = []
         for line in table_lines:
-            # Replace | inside <...> with placeholder
             protected = re.sub(r"<([^>]*)\|([^>]*)>", rf"<\1{pipe_placeholder}\2>", line)
             protected_lines.append(protected)
 
-        # Parse all rows into cells
         parsed_rows = [self._parse_row(line) for line in protected_lines]
         col_count = len(parsed_rows[0]) if parsed_rows else 0
 
@@ -535,13 +518,15 @@ class MrkdwnConverter:
             widths = [len(row[col]) for i, row in enumerate(parsed_rows) if i != 1 and col < len(row)]
             col_widths.append(max(widths) if widths else 3)
 
-        # Rebuild aligned table
         result = []
         for i, cells in enumerate(parsed_rows):
             if i == 1:  # Separator row
                 row = "| " + " | ".join("-" * w for w in col_widths) + " |"
             else:
-                padded = [cells[j].ljust(col_widths[j]) for j in range(len(cells))]
+                padded = [
+                    cells[j].ljust(col_widths[j]) if j < len(cells) else " " * col_widths[j]
+                    for j in range(len(col_widths))
+                ]
                 row = "| " + " | ".join(padded) + " |"
             # Restore pipes in slack links
             row = row.replace(pipe_placeholder, "|")
