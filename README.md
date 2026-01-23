@@ -273,6 +273,8 @@ Tables are detected using these criteria:
 
 Valid tables are wrapped in triple-backtick code blocks for monospace display in Slack.
 
+Column alignment accounts for Unicode character display width. Emoji like ⭐ render as 2 columns wide in monospace fonts but have a character length of 1. The converter pads columns based on display width to maintain proper alignment.
+
 ### Code Block Protection
 
 Content inside code blocks (both fenced and inline) is protected from conversion:

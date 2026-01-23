@@ -301,6 +301,53 @@ class TestTables:
         assert "|  OK" not in result
         assert "| OK" in result
 
+    def test_table_column_alignment_with_unicode_emoji(self) -> None:
+        """Test table columns stay aligned with Unicode emoji characters.
+
+        Unicode emoji like ⭐ have display width of 2 but len() returns 1.
+        The converter accounts for this by padding based on display width,
+        not character count.
+        """
+        from md2mrkdwn import MrkdwnConfig
+
+        # Disable emoji stripping to keep Unicode emoji in output
+        config = MrkdwnConfig(strip_table_emoji=False)
+        converter = MrkdwnConverter(config)
+
+        md = "| Metric | Rating |\n|---|---|\n| Test | ⭐⭐⭐⭐⭐ |"
+        result = converter.convert(md)
+
+        # Extract table rows (inside code block)
+        lines = result.strip().split("\n")
+        table_lines = [line for line in lines if line.startswith("|")]
+
+        # Get header and data row
+        header = table_lines[0]
+        data_row = table_lines[2]  # Skip separator
+
+        # Display widths should be equal, not character counts
+        # Use the converter's display width calculation
+        header_width = converter._display_width(header)
+        data_width = converter._display_width(data_row)
+        assert header_width == data_width, f"Misaligned display: header={header_width}, data={data_width}"
+
+    def test_table_column_alignment_mixed_unicode_text(self) -> None:
+        """Test alignment with mixed Unicode emoji and regular text."""
+        from md2mrkdwn import MrkdwnConfig
+
+        config = MrkdwnConfig(strip_table_emoji=False)
+        converter = MrkdwnConverter(config)
+
+        md = "| App | Rating | Status |\n|---|---|---|\n| MyApp | ⭐⭐⭐ | Active |\n| Other | ⭐ | Inactive |"
+        result = converter.convert(md)
+
+        lines = result.strip().split("\n")
+        table_lines = [line for line in lines if line.startswith("|")]
+
+        # All rows should have consistent display width
+        display_widths = [converter._display_width(line) for line in table_lines]
+        assert len(set(display_widths)) == 1, f"Inconsistent display widths: {display_widths}"
+
 
 class TestHorizontalRules:
     """Test horizontal rule conversions."""

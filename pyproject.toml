@@ -1,6 +1,6 @@
 [project]
 name = "md2mrkdwn"
-version = "0.4.1"
+version = "0.4.2"
 description = "Convert Markdown to Slack mrkdwn format"
 readme = "README.md"
 license = "MIT"

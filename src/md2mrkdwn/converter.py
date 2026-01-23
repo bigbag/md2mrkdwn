@@ -458,6 +458,47 @@ class MrkdwnConverter:
         """
         return bool(cells) and all(SEPARATOR_CELL_PATTERN.match(cell) for cell in cells)
 
+    def _display_width(self, text: str) -> int:
+        """Calculate display width accounting for wide Unicode characters.
+
+        Standard emoji and many Unicode symbols render as 2 columns wide in
+        monospace fonts, but Python's len() returns 1. This method provides
+        accurate display width for table column alignment.
+
+        Args:
+            text: Text to measure
+
+        Returns:
+            Display width in monospace columns
+        """
+        width = 0
+        for char in text:
+            # Simplified heuristic: characters above U+1F00 are treated as double-width.
+            # This covers most emoji (U+1F300+) but is imprecise for some ranges
+            # (e.g., CJK below U+1F00 would need wcwidth for accuracy).
+            # Acceptable trade-off for a zero-dependency library.
+            if ord(char) > 0x1F00:
+                width += 2
+            else:
+                width += 1
+        return width
+
+    def _ljust_display(self, text: str, width: int) -> str:
+        """Left-justify string based on display width, not character count.
+
+        Args:
+            text: Text to pad
+            width: Target display width
+
+        Returns:
+            Text padded with spaces to reach target width
+        """
+        current_width = self._display_width(text)
+        padding = width - current_width
+        if padding > 0:
+            return text + " " * padding
+        return text
+
     def _wrap_table(self, table_lines: list[str]) -> str:
         """Wrap table lines in a code block."""
         clean_lines = []
@@ -513,9 +554,10 @@ class MrkdwnConverter:
         col_count = len(parsed_rows[0]) if parsed_rows else 0
 
         # Calculate max width per column (skip separator row at index 1)
+        # Use display width to account for wide Unicode characters (emoji)
         col_widths = []
         for col in range(col_count):
-            widths = [len(row[col]) for i, row in enumerate(parsed_rows) if i != 1 and col < len(row)]
+            widths = [self._display_width(row[col]) for i, row in enumerate(parsed_rows) if i != 1 and col < len(row)]
             col_widths.append(max(widths) if widths else 3)
 
         result = []
@@ -524,7 +566,7 @@ class MrkdwnConverter:
                 row = "| " + " | ".join("-" * w for w in col_widths) + " |"
             else:
                 padded = [
-                    cells[j].ljust(col_widths[j]) if j < len(cells) else " " * col_widths[j]
+                    self._ljust_display(cells[j], col_widths[j]) if j < len(cells) else " " * col_widths[j]
                     for j in range(len(col_widths))
                 ]
                 row = "| " + " | ".join(padded) + " |"
