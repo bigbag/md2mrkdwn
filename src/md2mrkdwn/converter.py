@@ -6,6 +6,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 
+import wcwidth
+
 from md2mrkdwn.patterns import (
     BOLD_ASTERISKS_PATTERN,
     BOLD_ITALIC_ASTERISKS_PATTERN,
@@ -461,9 +463,8 @@ class MrkdwnConverter:
     def _display_width(self, text: str) -> int:
         """Calculate display width accounting for wide Unicode characters.
 
-        Standard emoji and many Unicode symbols render as 2 columns wide in
-        monospace fonts, but Python's len() returns 1. This method provides
-        accurate display width for table column alignment.
+        Uses wcwidth library for accurate width calculation of CJK characters,
+        emoji, and other wide Unicode characters in monospace fonts.
 
         Args:
             text: Text to measure
@@ -471,17 +472,9 @@ class MrkdwnConverter:
         Returns:
             Display width in monospace columns
         """
-        width = 0
-        for char in text:
-            # Simplified heuristic: characters above U+1F00 are treated as double-width.
-            # This covers most emoji (U+1F300+) but is imprecise for some ranges
-            # (e.g., CJK below U+1F00 would need wcwidth for accuracy).
-            # Acceptable trade-off for a zero-dependency library.
-            if ord(char) > 0x1F00:
-                width += 2
-            else:
-                width += 1
-        return width
+        width = wcwidth.wcswidth(text)
+        # wcswidth returns -1 if string contains non-printable characters
+        return width if width >= 0 else len(text)
 
     def _ljust_display(self, text: str, width: int) -> str:
         """Left-justify string based on display width, not character count.

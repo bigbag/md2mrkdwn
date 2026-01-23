@@ -1,6 +1,6 @@
 [project]
 name = "md2mrkdwn"
-version = "0.4.2"
+version = "0.4.3"
 description = "Convert Markdown to Slack mrkdwn format"
 readme = "README.md"
 license = "MIT"
@@ -19,7 +19,7 @@ classifiers = [
     "Topic :: Text Processing :: Markup",
     "Topic :: Communications :: Chat",
 ]
-dependencies = []
+dependencies = ["wcwidth>=0.2.0"]
 
 [project.urls]
 Homepage = "https://github.com/bigbag/md2mrkdwn"

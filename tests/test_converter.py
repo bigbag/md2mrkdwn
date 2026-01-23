@@ -433,3 +433,70 @@ class TestBlockquotes:
         result = converter.convert(md)
         assert "> Line 1" in result
         assert "> Line 2" in result
+
+
+class TestDisplayWidth:
+    """Test display width calculation for Unicode characters."""
+
+    def test_em_dash_single_width(self, converter: MrkdwnConverter) -> None:
+        """Test em-dash (U+2014) is single-width."""
+        assert converter._display_width("—") == 1
+
+    def test_en_dash_single_width(self, converter: MrkdwnConverter) -> None:
+        """Test en-dash (U+2013) is single-width."""
+        assert converter._display_width("–") == 1
+
+    def test_emoji_double_width(self, converter: MrkdwnConverter) -> None:
+        """Test common emoji are double-width (from agent_team source)."""
+        emoji_chars = {
+            "🔍": "magnifier",
+            "📊": "chart",
+            "📈": "chart_up",
+            "📉": "chart_down",
+            "🚀": "rocket",
+            "💡": "bulb",
+            "💰": "money",
+            "📱": "phone",
+            "🏆": "trophy",
+            "📅": "calendar",
+            "📋": "clipboard",
+            "📍": "pin",
+            "📝": "memo",
+            "🔑": "key",
+        }
+        for emoji, name in emoji_chars.items():
+            width = converter._display_width(emoji)
+            assert width == 2, f"{name} ({emoji}) should be width 2, got {width}"
+
+    def test_status_emoji_width(self, converter: MrkdwnConverter) -> None:
+        """Test status indicator emoji widths."""
+        # These may vary by terminal - wcwidth uses Unicode standard
+        assert converter._display_width("✅") >= 1  # check mark
+        assert converter._display_width("❌") >= 1  # cross mark
+
+    def test_mixed_text_with_emoji(self, converter: MrkdwnConverter) -> None:
+        """Test display width of text containing emoji."""
+        # "Hello 🚀" = 6 chars + 2 for emoji = 8 display width
+        assert converter._display_width("Hello 🚀") == 8
+
+    def test_mixed_text_with_dashes(self, converter: MrkdwnConverter) -> None:
+        """Test display width of text with em-dash and en-dash."""
+        # "A—B" = 3 chars, each width 1
+        assert converter._display_width("A—B") == 3
+        # "2020–2024" = 9 chars, each width 1
+        assert converter._display_width("2020–2024") == 9
+
+    def test_cjk_characters_double_width(self, converter: MrkdwnConverter) -> None:
+        """Test CJK characters are double-width."""
+        assert converter._display_width("中") == 2
+        assert converter._display_width("日本") == 4
+        assert converter._display_width("あ") == 2
+
+    def test_plain_ascii(self, converter: MrkdwnConverter) -> None:
+        """Test plain ASCII has width equal to length."""
+        text = "Hello World"
+        assert converter._display_width(text) == len(text)
+
+    def test_empty_string(self, converter: MrkdwnConverter) -> None:
+        """Test empty string has zero width."""
+        assert converter._display_width("") == 0
